@@ -60,7 +60,8 @@ class Solver:
         Args:
             filepath (str): Path to the input file
         """
-        print(filepath)
+        print("Day 1")
+        print(f"Solving: {filepath}")
         print("Part 1:")
         print(self.part_1(filepath))
         print("---")
