@@ -178,7 +178,7 @@ class Solver:
         Args:
             filepath (str): Path to the input file
         Returns:
-            None
+            Solution to part 2
         """
         return self.solve_part(filepath=filepath, post_inspection=lambda x: x, num_rounds=10000)
 

@@ -110,7 +110,7 @@ class Solver:
         Args:
             filepath (str): Path to the input file
         Returns:
-            None
+            Solution to part 2
         """
         return self.solve_part(filepath=filepath, starting_letters=[Solver.START, "a"])
 
