@@ -49,143 +49,75 @@ class Solver:
             for num in re.findall(r"\d+", line)
         )
         robot_costs = self.get_robot_costs(robot_values=robot_values)
-        max_ore, max_clay, max_obsidian, _ = [
+        max_costs = [
             max(resource) for resource in zip(*robot_costs)
         ]
+        geode_max: int = 0
 
-        def can_get_resource_in_time(
-            time: int,
+        def can_build(
             resources: list[int],
-            target_resource: int,
-            robots: list[int],
             target_robot: int
         ) -> bool:
-            return (
-                resources[target_resource] + (time - 1) * robots[target_resource] >=
-                robot_costs[target_robot][target_resource]
+            return all(
+                resource >= cost
+                for resource, cost in zip(resources, robot_costs[target_robot])
             )
-
-        def can_build_in_time(
-            time: int,
-            resources: list[int],
-            robots: list[int],
-            target_robot: int
-        ) -> bool:
-            if not can_get_resource_in_time(time, resources, Solver.ORE, robots, target_robot):
-                return False
-            if target_robot == Solver.OBSIDIAN:
-                return can_get_resource_in_time(time, resources, Solver.CLAY, robots, target_robot)
-            if target_robot == Solver.GEODE:
-                return can_get_resource_in_time(
-                    time, resources, Solver.OBSIDIAN, robots, target_robot)
-            return True
-
-        def should_not_build(
-            time: int,
-            resources: list[int],
-            robots: list[int],
-            target_robot: int,
-            current_geode_max: int
-        ) -> bool:
-            # Not enough time
-            if time <= 0:
-                return True
-
-            # No need for more ore robots
-            if target_robot == Solver.ORE and robots[Solver.ORE] >= max_ore:
-                return True
-
-            # No need for more clay robots
-            if target_robot == Solver.CLAY and robots[Solver.CLAY] >= max_clay:
-                return True
-
-            # No need for more obsidian robots or they are impossible to build
-            if (
-                target_robot == Solver.OBSIDIAN and
-                (
-                    robots[Solver.OBSIDIAN] >= max_obsidian or
-                    robots[Solver.CLAY] == 0
-                )
-            ):
-                return True
-
-            # Impossible to build geode robots
-            if target_robot == Solver.GEODE and robots[Solver.OBSIDIAN] == 0:
-                return True
-
-            max_possible_geode = resources[Solver.GEODE] + \
-                robots[Solver.GEODE] * time + (time - 1) * time // 2
-            return max_possible_geode <= current_geode_max
 
         def solve(
             time: int,
             resources: list[int],
             robots: list[int],
-            target_robot: int,
-            current_geode_max: int
-        ) -> int:
-            if should_not_build(
-                time=time,
-                resources=resources,
-                robots=robots,
-                target_robot=target_robot,
-                current_geode_max=current_geode_max
+            can_build_robots: list[bool]
+        ) -> None:
+            nonlocal geode_max
+
+            if time <= 0:
+                geode_max = max(geode_max, resources[Solver.GEODE])
+                return
+
+            if (
+                resources[Solver.GEODE] + robots[Solver.GEODE] *
+                    time + time * (time - 1) // 2
+                    <= geode_max
             ):
-                return resources[Solver.GEODE]
+                return
 
-            if not can_build_in_time(
-                time=time,
-                resources=resources,
-                robots=robots,
-                target_robot=target_robot
-            ):
-                return resources[Solver.GEODE] + time * robots[Solver.GEODE]
+            if can_build(resources, Solver.GEODE):
+                new_resources = [
+                    resource + robot - cost
+                    for resource, robot, cost
+                    in zip(resources, robots, robot_costs[Solver.GEODE])
+                ]
+                new_robots = list(robots)
+                new_robots[Solver.GEODE] += 1
+                solve(time - 1, new_resources, new_robots, [True] * 3)
+                return
 
-            time_taken = math.ceil(max(
-                0, *(
-                    (cost - resource) / robot if robot > 0 else 0
-                    for cost, resource, robot
-                    in zip(robot_costs[target_robot], resources, robots)
-                )
-            ))
+            new_can_build_robots = [True] * 3
+            for resource in [Solver.OBSIDIAN, Solver.CLAY, Solver.ORE]:
+                if can_build(resources, resource):
+                    new_can_build_robots[resource] = False
+                    if can_build_robots[resource] and robots[resource] < max_costs[resource]:
+                        new_resources = [
+                            resource + robot - cost
+                            for resource, robot, cost
+                            in zip(resources, robots, robot_costs[resource])
+                        ]
+                        new_robots = list(robots)
+                        new_robots[resource] += 1
+                        solve(time - 1, new_resources, new_robots, [True] * 3)
 
-            time -= time_taken + 1
             new_resources = [
-                resource + robot * (time_taken + 1) - cost
-                for resource, robot, cost
-                in zip(resources, robots, robot_costs[target_robot])
+                resource + robot
+                for resource, robot
+                in zip(resources, robots)
             ]
+            solve(time - 1, new_resources, robots, new_can_build_robots)
 
-            robots[target_robot] += 1
-            for next_robot in range(4):
-                current_geode_max = max(
-                    current_geode_max,
-                    solve(
-                        time=time,
-                        resources=new_resources,
-                        robots=robots,
-                        target_robot=next_robot,
-                        current_geode_max=current_geode_max
-                    )
-                )
-            robots[target_robot] -= 1
+            # return current_geode_max
 
-            return current_geode_max
-
-        result = 0
-        for target_robot in range(4):
-            result = max(
-                result,
-                solve(
-                    time=time,
-                    resources=[0, 0, 0, 0],
-                    robots=[1, 0, 0, 0],
-                    target_robot=target_robot,
-                    current_geode_max=result
-                )
-            )
-
-        return blueprint_id, result
+        solve(time, [0, 0, 0, 0], [1, 0, 0, 0], [True] * 3)
+        return blueprint_id, geode_max
 
     def part_1(self, filepath: str) -> int:
         """
